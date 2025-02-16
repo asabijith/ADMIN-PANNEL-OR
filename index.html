@@ -181,6 +181,24 @@
             background-color: #c0392b;
         }
 
+        /* Loading indicator styles */
+        .loading-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+        }
+
+        /* SVG-based loading icon */
+        .line-md--downloading-loop {
+            display: inline-block;
+            width: 34px;
+            height: 34px;
+            background-repeat: no-repeat;
+            background-size: 100% 100%;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='%230066ff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'%3E%3Cpath stroke-dasharray='2 4' stroke-dashoffset='6' d='M12 3c4.97 0 9 4.03 9 9c0 4.97 -4.03 9 -9 9'%3E%3Canimate attributeName='stroke-dashoffset' dur='0.6s' repeatCount='indefinite' values='6;0'/%3E%3C/path%3E%3Cpath stroke-dasharray='32' stroke-dashoffset='32' d='M12 21c-4.97 0 -9 -4.03 -9 -9c0 -4.97 4.03 -9 9 -9'%3E%3Canimate fill='freeze' attributeName='stroke-dashoffset' begin='0.1s' dur='0.4s' values='32;0'/%3E%3C/path%3E%3Cpath stroke-dasharray='10' stroke-dashoffset='10' d='M12 8v7.5'%3E%3Canimate fill='freeze' attributeName='stroke-dashoffset' begin='0.5s' dur='0.2s' values='10;0'/%3E%3C/path%3E%3Cpath stroke-dasharray='6' stroke-dashoffset='6' d='M12 15.5l3.5 -3.5M12 15.5l-3.5 -3.5'%3E%3Canimate fill='freeze' attributeName='stroke-dashoffset' begin='0.7s' dur='0.2s' values='6;0'/%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 1rem;
@@ -215,19 +233,24 @@
             <div class="input-group">
                 <input type="password" id="password" placeholder="Password" />
             </div>
-            <button onclick="login()" class="button">Login</button>
+            <button onclick="login()" class="button" id="loginButton">Login</button>
+            <div id="loginLoadingContainer" class="loading-container" style="display: none;">
+                <span class="line-md--downloading-loop"></span>
+            </div>
             <p id="errorMessage" class="error-message">Invalid username or password</p>
         </div>
 
         <div id="applicationsContainer" class="applications-container">
             <div class="header-actions">
-              
                 <button onclick="downloadPDF()" class="button download-button">Download PDF</button>
                 <button onclick="logout()" class="button logout-button">Logout</button>
             </div>
             <h1>Submitted Applications</h1>
             <div id="statusBanner" class="status-banner">
                 Applications are currently closed. Maximum limit reached.
+            </div>
+            <div id="dataLoadingContainer" class="loading-container">
+                <span class="line-md--downloading-loop"></span>
             </div>
             <div id="applicationsGrid" class="applications-grid">
                 <!-- Applications will be dynamically added here -->
@@ -260,17 +283,30 @@
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const errorMessage = document.getElementById('errorMessage');
+            const loginButton = document.getElementById('loginButton');
+            const loginLoadingContainer = document.getElementById('loginLoadingContainer');
 
-            if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-                document.getElementById('loginContainer').style.display = 'none';
-                document.getElementById('applicationsContainer').style.display = 'block';
-                document.getElementById('applicationsContainer').classList.add('fade-in');
-                loadApplications();
-                errorMessage.style.display = 'none';
-            } else {
-                errorMessage.style.display = 'block';
-                errorMessage.classList.add('fade-in');
-            }
+            // Show loading indicator
+            loginButton.style.display = 'none';
+            loginLoadingContainer.style.display = 'flex';
+            
+            // Simulate a small delay for login process
+            setTimeout(() => {
+                if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+                    document.getElementById('loginContainer').style.display = 'none';
+                    document.getElementById('applicationsContainer').style.display = 'block';
+                    document.getElementById('applicationsContainer').classList.add('fade-in');
+                    loadApplications();
+                    errorMessage.style.display = 'none';
+                } else {
+                    errorMessage.style.display = 'block';
+                    errorMessage.classList.add('fade-in');
+                    
+                    // Hide loading indicator and show button again on error
+                    loginButton.style.display = 'inline-block';
+                    loginLoadingContainer.style.display = 'none';
+                }
+            }, 1000);
         }
 
         function logout() {
@@ -280,10 +316,22 @@
             document.getElementById('username').value = '';
             document.getElementById('password').value = '';
             document.getElementById('applicationsGrid').innerHTML = '';
+            
+            // Reset the login button and loading indicator
+            document.getElementById('loginButton').style.display = 'inline-block';
+            document.getElementById('loginLoadingContainer').style.display = 'none';
+            
             applicationsData = [];
         }
 
         async function loadApplications() {
+            const dataLoadingContainer = document.getElementById('dataLoadingContainer');
+            const applicationsGrid = document.getElementById('applicationsGrid');
+            
+            // Show loading indicator
+            dataLoadingContainer.style.display = 'flex';
+            applicationsGrid.style.display = 'none';
+            
             try {
                 const countDoc = await db.collection('metadata').doc('count').get();
                 const currentCount = countDoc.exists ? countDoc.data().count : 0;
@@ -315,8 +363,27 @@
                     grid.appendChild(card);
                 });
 
+                // Hide loading indicator and show grid
+                setTimeout(() => {
+                    dataLoadingContainer.style.display = 'none';
+                    applicationsGrid.style.display = 'grid';
+                }, 1000);
+
             } catch (error) {
                 console.error('Error loading applications:', error);
+                
+                // Hide loading indicator even on error
+                dataLoadingContainer.style.display = 'none';
+                applicationsGrid.style.display = 'grid';
+                
+                // Show an error message if needed
+                const errorCard = document.createElement('div');
+                errorCard.className = 'card fade-in';
+                errorCard.innerHTML = `
+                    <h3 style="color: var(--error-color)">Error Loading Data</h3>
+                    <p>There was a problem loading the applications. Please try again later.</p>
+                `;
+                applicationsGrid.appendChild(errorCard);
             }
         }
 
